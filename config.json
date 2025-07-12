@@ -1,0 +1,12 @@
+{
+  "feConfigs": {
+    "lafEnv": "https://laf.dev",
+    "mcpServerProxyEndpoint": "http://mcp-server:3000"
+  },
+  "systemEnv": {
+    "vectorMaxProcess": 15,
+    "qaMaxProcess": 15,
+    "tokenWorkers": 30,
+    "pgHNSWEfSearch": 100
+  }
+}
