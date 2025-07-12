@@ -1,0 +1,62 @@
+version: "3"
+
+services:
+
+  # Main OrixGPT service (OrixGPT application)
+  orixgpt:
+    container_name: orixgpt
+    image: ghcr.io/labring/fastgpt:v${FASTGPT_VERSION}
+    environment:
+      FE_DOMAIN: ${FE_DOMAIN}
+      DEFAULT_ROOT_PSW: ${DEFAULT_ROOT_PSW}
+      AIPROXY_API_ENDPOINT: ${AIPROXY_API_ENDPOINT}
+      AIPROXY_API_TOKEN: ${AIPROXY_API_TOKEN}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      CHAT_API_KEY: ${CHAT_API_KEY}
+      DB_MAX_LINK: ${DB_MAX_LINK}
+      TOKEN_KEY: ${TOKEN_KEY}
+      ROOT_KEY: ${ROOT_KEY}
+      FILE_TOKEN_KEY: ${FILE_TOKEN_KEY}
+      MONGODB_URI: ${MONGODB_URI}
+      PG_URL: ${PG_URL}
+      REDIS_URL: ${REDIS_URL}
+      SANDBOX_URL: ${SANDBOX_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      STORE_LOG_LEVEL: ${STORE_LOG_LEVEL}
+      WORKFLOW_MAX_RUN_TIMES: ${WORKFLOW_MAX_RUN_TIMES}
+      WORKFLOW_MAX_LOOP_TIMES: ${WORKFLOW_MAX_LOOP_TIMES}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      USE_IP_LIMIT: ${USE_IP_LIMIT}
+      CHAT_FILE_EXPIRE_TIME: ${CHAT_FILE_EXPIRE_TIME}
+    ports:
+      - 3000
+    volumes:
+      - data:/app/data
+      - ./config.json:/app/data/config.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.orixgpt.rule=Host(`app-demo.orixgpt.com`)"
+      - "traefik.http.routers.orixgpt.entrypoints=websecure"
+      - "traefik.http.routers.orixgpt.tls.certResolver=letsencrypt"
+      - "traefik.http.services.orixgpt.loadBalancer.server.port=3000"
+
+volumes:
+  data:
+
+networks:
+  dokploy-network:
+    external: true
