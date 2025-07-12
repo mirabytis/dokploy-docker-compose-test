@@ -3,8 +3,8 @@ version: "3"
 services:
 
   # Main OrixGPT service (OrixGPT application)
-  orixgpt:
-    container_name: orixgpt
+  orixleo:
+    container_name: orixleo
     image: ghcr.io/labring/fastgpt:v${FASTGPT_VERSION}
     environment:
       FE_DOMAIN: ${FE_DOMAIN}
