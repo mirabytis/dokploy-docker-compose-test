@@ -140,7 +140,7 @@ services:
     container_name: sandbox
     image: ghcr.io/labring/fastgpt-sandbox:v4.10.0-fix
     networks:
-      - fastgpt
+      - dokploy-network
     restart: always
   fastgpt-mcp-server:
     container_name: fastgpt-mcp-server
