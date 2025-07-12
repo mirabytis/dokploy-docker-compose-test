@@ -5,7 +5,7 @@ services:
     container_name: pg
     restart: always
     networks:
-      - fastgpt
+      - dokploy-network
     environment:
       - POSTGRES_USER=username
       - POSTGRES_PASSWORD=password
@@ -23,7 +23,7 @@ services:
     container_name: mongo
     restart: always
     networks:
-      - fastgpt
+      - dokploy-network
     command: mongod --keyFile /data/mongodb.key --replSet rs0
     environment:
       - MONGO_INITDB_ROOT_USERNAME=myusername
@@ -61,7 +61,7 @@ services:
     image: redis:7.2-alpine
     container_name: redis
     networks:
-      - fastgpt
+      - dokploy-network
     restart: always
     command: |
       redis-server --requirepass mypassword --loglevel warning --maxclients 10000 --appendonly yes --save 60 10 --maxmemory 4gb --maxmemory-policy noeviction
@@ -78,7 +78,7 @@ services:
     container_name: fastgpt-minio
     restart: always
     networks:
-      - fastgpt
+      - dokploy-network
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -100,7 +100,7 @@ services:
     ports:
       - 3000:3000
     networks:
-      - fastgpt
+      - dokploy-network
     depends_on:
       - mongo
       - sandbox
@@ -148,7 +148,7 @@ services:
     ports:
       - 3005:3000
     networks:
-      - fastgpt
+      - dokploy-network
     restart: always
     environment:
       - FASTGPT_ENDPOINT=http://fastgpt:3000
@@ -157,7 +157,7 @@ services:
     container_name: fastgpt-plugin
     restart: always
     networks:
-      - fastgpt
+      - dokploy-network
     environment:
       - AUTH_TOKEN=xxxxxx
       - MINIO_CUSTOM_ENDPOINT=https://192.168.2.2:9000
@@ -179,7 +179,7 @@ services:
       aiproxy_pg:
         condition: service_healthy
     networks:
-      - fastgpt
+      - dokploy-network
     environment:
       - ADMIN_KEY=aiproxy
       - LOG_DETAIL_STORAGE_HOURS=1
@@ -199,7 +199,7 @@ services:
     volumes:
       - ./aiproxy_pg:/var/lib/postgresql/data
     networks:
-      - fastgpt
+      - dokploy-network
     environment:
       TZ: Asia/Shanghai
       POSTGRES_USER: postgres
@@ -210,5 +210,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      
 networks:
-  fastgpt:
+  dokploy-network:
+    external: true
