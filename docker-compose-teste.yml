@@ -220,7 +220,7 @@ services:
     environment:
       AUTH_TOKEN: ${AUTH_TOKEN}
       MINIO_CUSTOM_ENDPOINT: http://minio:9000
-      MINIO_ENDPOINT: minio
+      MINIO_ENDPOINT: fastgpt-minio
       MINIO_PORT: ${MINIO_PORT}
       MINIO_USE_SSL: false
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
