@@ -1,0 +1,275 @@
+version: "3.3"
+
+services:
+  pg:
+    container_name: pg
+    image: pgvector/pgvector:${PGVECTOR_VERSION}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./pg/data:/var/lib/postgresql/data
+    ports:
+      - ${POSTGRES_PORT}:${POSTGRES_PORT}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+
+  mongo:
+    container_name: mongo
+    image: mongo:${MONGO_VERSION}
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    ports:
+      - ${MONGO_INITDB_PORT}:${MONGO_INITDB_PORT}
+    volumes:
+      - ./mongo/data:/data/db
+    command: mongod --keyFile /data/mongodb.key --replSet rs0
+    entrypoint:
+      - bash
+      - -c
+      - |
+        openssl rand -base64 128 > /data/mongodb.key
+        chmod 400 /data/mongodb.key
+        chown 999:999 /data/mongodb.key
+        echo 'const isInited = rs.status().ok === 1
+        if (!isInited) {
+          rs.initiate({
+            _id: "rs0",
+            members: [{ _id: 0, host: "mongo:27017" }]
+          })
+        }' > /data/initReplicaSet.js
+        exec docker-entrypoint.sh "$$@" &
+        until mongo -u ${MONGO_INITDB_ROOT_USERNAME} -p ${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval "print('waited for connection')"; do
+          echo "Waiting for MongoDB to start..."
+          sleep 2
+        done
+        mongo -u ${MONGO_INITDB_ROOT_USERNAME} -p ${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin /data/initReplicaSet.js
+        wait $$!
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongo",
+          "-u",
+          "${MONGO_INITDB_ROOT_USERNAME}",
+          "-p",
+          "${MONGO_INITDB_ROOT_PASSWORD}",
+          "--authenticationDatabase",
+          "admin",
+          "--eval",
+          "db.adminCommand('ping').ok"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+
+  redis:
+    container_name: redis
+    image: redis:${REDIS_VERSION}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - ${REDIS_PORT}:${REDIS_PORT}
+    volumes:
+      - ./redis/data:/data
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --loglevel warning
+      --maxclients 10000
+      --appendonly yes
+      --save 60 10
+      --maxmemory 4gb
+      --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+
+  fastgpt-minio:
+    container_name: fastgpt-minio
+    image: minio/minio:${MINIO_VERSION}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - ${MINIO_PORT}:${MINIO_PORT}
+      - ${MINIO_PORT_BINDING}:${MINIO_PORT_BINDING}
+    volumes:
+      - ./fastgpt-minio:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  fastgpt:
+    container_name: fastgpt
+    image: ghcr.io/labring/fastgpt:v4.10.0-fix
+    ports:
+      - 3000:3000
+    networks:
+      - dokploy-network
+    depends_on:
+      - mongo
+      - sandbox
+      - pg
+    restart: always
+    environment:
+      - FE_DOMAIN=
+      - DEFAULT_ROOT_PSW=1234
+      - TOKEN_KEY=any
+      - ROOT_KEY=root_key
+      - FILE_TOKEN_KEY=filetoken
+      - AES256_SECRET_KEY=fastgptkey
+      - PLUGIN_BASE_URL=http://fastgpt-plugin:3000
+      - PLUGIN_TOKEN=xxxxxx
+      - SANDBOX_URL=http://sandbox:3000
+      - AIPROXY_API_ENDPOINT=http://aiproxy:3000
+      - AIPROXY_API_TOKEN=aiproxy
+      - DB_MAX_LINK=30
+      - MONGODB_URI=mongodb://myusername:mypassword@mongo:27017/fastgpt?authSource=admin
+      - REDIS_URL=redis://default:mypassword@redis:6379
+      - PG_URL=postgresql://username:password@pg:5432/postgres
+      - LOG_LEVEL=info
+      - STORE_LOG_LEVEL=warn
+      - WORKFLOW_MAX_RUN_TIMES=1000
+      - WORKFLOW_MAX_LOOP_TIMES=100
+      - CHAT_FILE_EXPIRE_TIME=7
+    volumes:
+      - ./config.json:/app/data/config.json
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.next-app.rule=Host(`app-demo.orixgpt.com`)
+      - traefik.http.routers.next-app.entrypoints=websecure
+      - traefik.http.routers.next-app.tls.certResolver=letsencrypt
+      - traefik.http.services.next-app.loadbalancer.server.port=3000
+
+  sandbox:
+    container_name: sandbox
+    image: ghcr.io/labring/fastgpt-sandbox:v${SANDBOX_VERSION}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+
+  fastgpt-mcp-server:
+    container_name: fastgpt-mcp_server
+    image: ghcr.io/labring/fastgpt-mcp_server:v${MCP_SERVER_VERSION}
+    environment:
+      FASTGPT_ENDPOINT: ${FASTGPT_ENDPOINT}
+    ports:
+      - ${MCP_SERVER_PORT}:${MCP_SERVER_PORT_BINDING}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+
+  fastgpt-plugin:
+    container_name: fastgpt-plugin
+    image: ghcr.io/labring/fastgpt-plugin:v${FASTGPT_PLUGIN_VERSION}
+    environment:
+      AUTH_TOKEN: ${AUTH_TOKEN}
+      MINIO_CUSTOM_ENDPOINT: http://minio:9000
+      MINIO_ENDPOINT: fastgpt-minio
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: false
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: fastgpt-plugins
+    depends_on:
+      fastgpt-minio:
+        condition: service_healthy
+
+  aiproxy:
+    image: ghcr.io/labring/aiproxy:v0.2.2
+    container_name: aiproxy
+    restart: unless-stopped
+    depends_on:
+      aiproxy_pg:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    environment:
+      - ADMIN_KEY=aiproxy
+      - LOG_DETAIL_STORAGE_HOURS=1
+      - SQL_DSN=postgres://postgres:aiproxy@aiproxy_pg:5432/aiproxy
+      - RETRY_TIMES=3
+      - BILLING_ENABLED=false
+      - DISABLE_MODEL_CONFIG=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  aiproxy_pg:
+    image: pgvector/pgvector:0.8.0-pg15
+    restart: unless-stopped
+    container_name: aiproxy_pg
+    volumes:
+      - ./aiproxy_pg:/var/lib/postgresql/data
+    networks:
+      - dokploy-network
+    environment:
+      TZ: Asia/Shanghai
+      POSTGRES_USER: postgres
+      POSTGRES_DB: aiproxy
+      POSTGRES_PASSWORD: aiproxy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "aiproxy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  dokploy-network:
+    external: true
