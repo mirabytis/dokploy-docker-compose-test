@@ -244,7 +244,7 @@ aiproxy:
       - aiproxy_data:/data
       - ./aiproxy:/aiproxy
     depends_on:
-      aiproxy_postgres:
+      aiproxy_pg:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
