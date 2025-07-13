@@ -28,17 +28,16 @@ services:
     restart: unless-stopped
     
   mongo:
-    image: mongo:5.0.18
     container_name: mongo
-    restart: always
-    networks:
-      - dokploy-network
-    command: mongod --keyFile /data/mongodb.key --replSet rs0
+    image: mongo:${MONGO_VERSION}
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=myusername
-      - MONGO_INITDB_ROOT_PASSWORD=mypassword
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    ports:
+      - ${MONGO_INITDB_PORT}:${MONGO_INITDB_PORT}
     volumes:
       - ./mongo/data:/data/db
+    command: mongod --keyFile /data/mongodb.key --replSet rs0
     entrypoint:
       - bash
       - -c
@@ -47,25 +46,46 @@ services:
         chmod 400 /data/mongodb.key
         chown 999:999 /data/mongodb.key
         echo 'const isInited = rs.status().ok === 1
-        if(!isInited){
+        if (!isInited) {
           rs.initiate({
-              _id: "rs0",
-              members: [
-                  { _id: 0, host: "mongo:27017" }
-              ]
+            _id: "rs0",
+            members: [{ _id: 0, host: "mongo:27017" }]
           })
         }' > /data/initReplicaSet.js
         exec docker-entrypoint.sh "$$@" &
-
-        until mongo -u myusername -p mypassword --authenticationDatabase admin --eval "print('waited for connection')"; do
+        until mongo -u ${MONGO_INITDB_ROOT_USERNAME} -p ${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval "print('waited for connection')"; do
           echo "Waiting for MongoDB to start..."
           sleep 2
         done
-
-        mongo -u myusername -p mypassword --authenticationDatabase admin /data/initReplicaSet.js
-
+        mongo -u ${MONGO_INITDB_ROOT_USERNAME} -p ${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin /data/initReplicaSet.js
         wait $$!
-
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongo",
+          "-u",
+          "${MONGO_INITDB_ROOT_USERNAME}",
+          "-p",
+          "${MONGO_INITDB_ROOT_PASSWORD}",
+          "--authenticationDatabase",
+          "admin",
+          "--eval",
+          "db.adminCommand('ping').ok",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+  
   redis:
     image: redis:7.2-alpine
     container_name: redis
