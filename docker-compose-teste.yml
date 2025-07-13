@@ -1,4 +1,5 @@
 version: "3.3"
+
 services:
   pg:
     container_name: pg
@@ -12,8 +13,7 @@ services:
     ports:
       - ${POSTGRES_PORT}:${POSTGRES_PORT}
     healthcheck:
-      test:
-        ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,7 +26,7 @@ services:
     networks:
       - dokploy-network
     restart: unless-stopped
-    
+
   mongo:
     container_name: mongo
     image: mongo:${MONGO_VERSION}
@@ -71,7 +71,7 @@ services:
           "--authenticationDatabase",
           "admin",
           "--eval",
-          "db.adminCommand('ping').ok",
+          "db.adminCommand('ping').ok"
         ]
       interval: 10s
       timeout: 5s
@@ -85,14 +85,14 @@ services:
     networks:
       - dokploy-network
     restart: unless-stopped
-  
+
   redis:
     container_name: redis
     image: redis:${REDIS_VERSION}
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
-     - ${REDIS_PORT}:${REDIS_PORT}  
+      - ${REDIS_PORT}:${REDIS_PORT}
     volumes:
       - ./redis/data:/data
     command: >
@@ -118,7 +118,7 @@ services:
     networks:
       - dokploy-network
     restart: unless-stopped
-  
+
   fastgpt-minio:
     container_name: fastgpt-minio
     image: minio/minio:${MINIO_VERSION}
@@ -178,7 +178,7 @@ services:
       - traefik.http.routers.next-app.entrypoints=websecure
       - traefik.http.routers.next-app.tls.certResolver=letsencrypt
       - traefik.http.services.next-app.loadbalancer.server.port=3000
-      
+
   sandbox:
     container_name: sandbox
     image: ghcr.io/labring/fastgpt-sandbox:v${SANDBOX_VERSION}
@@ -190,7 +190,6 @@ services:
     networks:
       - dokploy-network
     restart: unless-stopped
-    
 
   fastgpt-mcp-server:
     container_name: fastgpt-mcp_server
@@ -213,7 +212,7 @@ services:
     networks:
       - dokploy-network
     restart: unless-stopped
-      
+
   fastgpt-plugin:
     container_name: fastgpt-plugin
     image: ghcr.io/labring/fastgpt-plugin:v${FASTGPT_PLUGIN_VERSION}
@@ -230,7 +229,7 @@ services:
       fastgpt-minio:
         condition: service_healthy
 
-aiproxy:
+  aiproxy:
     container_name: aiproxy
     image: ghcr.io/labring/aiproxy:v${AIPROXY_VERSION}
     environment:
@@ -257,7 +256,7 @@ aiproxy:
     networks:
       - dokploy-network
     restart: unless-stopped
-  
+
   aiproxy_pg:
     container_name: aiproxy_pg
     image: pgvector/pgvector:${AIPROXY_PG_VERSION}
@@ -276,7 +275,7 @@ aiproxy:
           "-U",
           "${AIPROXY_PG_USER}",
           "-d",
-          "${AIPROXY_PG_DB}",
+          "${AIPROXY_PG_DB}"
         ]
       interval: 10s
       timeout: 5s
@@ -290,7 +289,7 @@ aiproxy:
     networks:
       - dokploy-network
     restart: unless-stopped
-      
+
 networks:
   dokploy-network:
     external: true
