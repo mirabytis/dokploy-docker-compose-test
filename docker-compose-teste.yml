@@ -137,7 +137,7 @@ services:
       timeout: 20s
       retries: 3
 
-fastgpt:
+  fastgpt:
     container_name: fastgpt
     image: ghcr.io/labring/fastgpt:v4.10.0-fix
     ports:
@@ -250,7 +250,7 @@ fastgpt:
       interval: 5s
       timeout: 5s
       retries: 10
-  
+
   aiproxy_pg:
     image: pgvector/pgvector:0.8.0-pg15
     restart: unless-stopped
