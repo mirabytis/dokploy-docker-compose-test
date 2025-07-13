@@ -87,21 +87,38 @@ services:
     restart: unless-stopped
   
   redis:
-    image: redis:7.2-alpine
     container_name: redis
-    networks:
-      - dokploy-network
-    restart: always
-    command: |
-      redis-server --requirepass mypassword --loglevel warning --maxclients 10000 --appendonly yes --save 60 10 --maxmemory 4gb --maxmemory-policy noeviction
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "mypassword", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 30s
+    image: redis:${REDIS_VERSION}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+     - ${REDIS_PORT}:${REDIS_PORT}  
     volumes:
       - ./redis/data:/data
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --loglevel warning
+      --maxclients 10000
+      --appendonly yes
+      --save 60 10
+      --maxmemory 4gb
+      --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
+  
   fastgpt-minio:
     image: minio/minio:latest
     container_name: fastgpt-minio
