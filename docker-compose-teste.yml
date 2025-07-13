@@ -215,22 +215,19 @@ services:
     restart: unless-stopped
       
   fastgpt-plugin:
-    image: ghcr.io/labring/fastgpt-plugin:v0.1.2
     container_name: fastgpt-plugin
-    restart: always
-    networks:
-      - dokploy-network
+    image: ghcr.io/labring/fastgpt-plugin:v${FASTGPT_PLUGIN_VERSION}
     environment:
-      - AUTH_TOKEN=xxxxxx
-      - MINIO_CUSTOM_ENDPOINT=https://192.168.2.2:9000
-      - MINIO_ENDPOINT=fastgpt-minio
-      - MINIO_PORT=9000
-      - MINIO_USE_SSL=false
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-      - MINIO_BUCKET=fastgpt-plugins
+      AUTH_TOKEN: ${AUTH_TOKEN}
+      MINIO_CUSTOM_ENDPOINT: http://minio:9000
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: ${MINIO_PORT}
+      MINIO_USE_SSL: false
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: fastgpt-plugins
     depends_on:
-      fastgpt-minio:
+      minio:
         condition: service_healthy
 
   aiproxy:
