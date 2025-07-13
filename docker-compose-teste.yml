@@ -230,65 +230,45 @@ services:
         condition: service_healthy
 
   aiproxy:
+    image: ghcr.io/labring/aiproxy:v0.2.2
     container_name: aiproxy
-    image: ghcr.io/labring/aiproxy:v${AIPROXY_VERSION}
-    environment:
-      ADMIN_KEY: ${AIPROXY_API_TOKEN}
-      LOG_DETAIL_STORAGE_HOURS: ${LOG_DETAIL_STORAGE_HOURS}
-      - SQL_DSN=postgres://postgres:aiproxy@aiproxy_pg:5432/aiproxy
-      RETRY_TIMES: ${AIPROXY_RETRY_TIMES}
-      BILLING_ENABLED: ${AIPROXY_BILLING_ENABLED}
-      DISABLE_MODEL_CONFIG: ${AIPROXY_DISABLE_MODEL_CONFIG}
+    restart: unless-stopped
     depends_on:
       aiproxy_pg:
         condition: service_healthy
+    networks:
+      - dokploy-network
+    environment:
+      - ADMIN_KEY=aiproxy
+      - LOG_DETAIL_STORAGE_HOURS=1
+      - SQL_DSN=postgres://postgres:aiproxy@aiproxy_pg:5432/aiproxy
+      - RETRY_TIMES=3
+      - BILLING_ENABLED=false
+      - DISABLE_MODEL_CONFIG=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-    networks:
-      - dokploy-network
-    restart: unless-stopped
-
+      retries: 10
+  
   aiproxy_pg:
+    image: pgvector/pgvector:0.8.0-pg15
+    restart: unless-stopped
     container_name: aiproxy_pg
-    image: pgvector/pgvector:${AIPROXY_PG_VERSION}
-    environment:
-      TZ: ${TIMEZONE}
-      POSTGRES_USER: ${AIPROXY_PG_USER}
-      POSTGRES_DB: ${AIPROXY_PG_DB}
-      POSTGRES_PASSWORD: ${AIPROXY_PG_PASSWORD}
     volumes:
       - ./aiproxy_pg:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "pg_isready",
-          "-U",
-          "${AIPROXY_PG_USER}",
-          "-d",
-          "${AIPROXY_PG_DB}"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
     networks:
       - dokploy-network
-    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      POSTGRES_USER: postgres
+      POSTGRES_DB: aiproxy
+      POSTGRES_PASSWORD: aiproxy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "aiproxy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 networks:
   dokploy-network:
