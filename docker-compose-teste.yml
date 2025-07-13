@@ -131,7 +131,7 @@ services:
       - ./config.json:/app/data/config.json
     labels:
       - traefik.enable=true
-      - traefik.http.routers.next-app.rule=Host(`orixgpt-fastgpt-9pi2rc-65cf59-31-97-16-23.traefik.me`)
+      - traefik.http.routers.next-app.rule=Host(`orixgpt-teste-kj1xzb-7f1d49-31-97-16-23.traefik.me`)
       - traefik.http.routers.next-app.entrypoints=websecure
       - traefik.http.routers.next-app.tls.certResolver=letsencrypt
       - traefik.http.services.next-app.loadbalancer.server.port=3000
