@@ -181,20 +181,39 @@ services:
       
   sandbox:
     container_name: sandbox
-    image: ghcr.io/labring/fastgpt-sandbox:v4.10.0-fix
+    image: ghcr.io/labring/fastgpt-sandbox:v${SANDBOX_VERSION}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     networks:
       - dokploy-network
-    restart: always
+    restart: unless-stopped
+    
+
   fastgpt-mcp-server:
-    container_name: fastgpt-mcp-server
-    image: ghcr.io/labring/fastgpt-mcp_server:v4.10.0-fix
+    container_name: fastgpt-mcp_server
+    image: ghcr.io/labring/fastgpt-mcp_server:v${MCP_SERVER_VERSION}
+    environment:
+      FASTGPT_ENDPOINT: ${FASTGPT_ENDPOINT}
     ports:
-      - 3005:3000
+      - ${MCP_SERVER_PORT}:${MCP_SERVER_PORT_BINDING}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     networks:
       - dokploy-network
-    restart: always
-    environment:
-      - FASTGPT_ENDPOINT=http://fastgpt:3000
+    restart: unless-stopped
+      
   fastgpt-plugin:
     image: ghcr.io/labring/fastgpt-plugin:v0.1.2
     container_name: fastgpt-plugin
