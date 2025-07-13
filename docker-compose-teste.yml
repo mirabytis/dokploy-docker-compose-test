@@ -1,0 +1,216 @@
+version: "3.3"
+services:
+  pg:
+    image: pgvector/pgvector:0.8.0-pg15
+    container_name: pg
+    restart: always
+    networks:
+      - dokploy-network
+    environment:
+      - POSTGRES_USER=username
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
+    volumes:
+      - ./pg/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "username", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:5.0.18
+    container_name: mongo
+    restart: always
+    networks:
+      - dokploy-network
+    command: mongod --keyFile /data/mongodb.key --replSet rs0
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=myusername
+      - MONGO_INITDB_ROOT_PASSWORD=mypassword
+    volumes:
+      - ./mongo/data:/data/db
+    entrypoint:
+      - bash
+      - -c
+      - |
+        openssl rand -base64 128 > /data/mongodb.key
+        chmod 400 /data/mongodb.key
+        chown 999:999 /data/mongodb.key
+        echo 'const isInited = rs.status().ok === 1
+        if(!isInited){
+          rs.initiate({
+              _id: "rs0",
+              members: [
+                  { _id: 0, host: "mongo:27017" }
+              ]
+          })
+        }' > /data/initReplicaSet.js
+        exec docker-entrypoint.sh "$$@" &
+
+        until mongo -u myusername -p mypassword --authenticationDatabase admin --eval "print('waited for connection')"; do
+          echo "Waiting for MongoDB to start..."
+          sleep 2
+        done
+
+        mongo -u myusername -p mypassword --authenticationDatabase admin /data/initReplicaSet.js
+
+        wait $$!
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    networks:
+      - dokploy-network
+    restart: always
+    command: |
+      redis-server --requirepass mypassword --loglevel warning --maxclients 10000 --appendonly yes --save 60 10 --maxmemory 4gb --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "mypassword", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - ./redis/data:/data
+  fastgpt-minio:
+    image: minio/minio:latest
+    container_name: fastgpt-minio
+    restart: always
+    networks:
+      - dokploy-network
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - ./fastgpt-minio:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  fastgpt:
+    container_name: fastgpt
+    image: ghcr.io/labring/fastgpt:v4.10.0-fix
+    ports:
+      - 3000:3000
+    networks:
+      - dokploy-network
+    depends_on:
+      - mongo
+      - sandbox
+      - pg
+    restart: always
+    environment:
+      - FE_DOMAIN=
+      - DEFAULT_ROOT_PSW=1234
+      - TOKEN_KEY=any
+      - ROOT_KEY=root_key
+      - FILE_TOKEN_KEY=filetoken
+      - AES256_SECRET_KEY=fastgptkey
+      - PLUGIN_BASE_URL=http://fastgpt-plugin:3000
+      - PLUGIN_TOKEN=xxxxxx
+      - SANDBOX_URL=http://sandbox:3000
+      - AIPROXY_API_ENDPOINT=http://aiproxy:3000
+      - AIPROXY_API_TOKEN=aiproxy
+      - DB_MAX_LINK=30
+      - MONGODB_URI=mongodb://myusername:mypassword@mongo:27017/fastgpt?authSource=admin
+      - REDIS_URL=redis://default:mypassword@redis:6379
+      - PG_URL=postgresql://username:password@pg:5432/postgres
+      - LOG_LEVEL=info
+      - STORE_LOG_LEVEL=warn
+      - WORKFLOW_MAX_RUN_TIMES=1000
+      - WORKFLOW_MAX_LOOP_TIMES=100
+      - CHAT_FILE_EXPIRE_TIME=7
+    volumes:
+      - ./config.json:/app/data/config.json
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.next-app.rule=Host(`orixgpt-fastgpt-9pi2rc-65cf59-31-97-16-23.traefik.me`)
+      - traefik.http.routers.next-app.entrypoints=websecure
+      - traefik.http.routers.next-app.tls.certResolver=letsencrypt
+      - traefik.http.services.next-app.loadbalancer.server.port=3000
+      
+  sandbox:
+    container_name: sandbox
+    image: ghcr.io/labring/fastgpt-sandbox:v4.10.0-fix
+    networks:
+      - dokploy-network
+    restart: always
+  fastgpt-mcp-server:
+    container_name: fastgpt-mcp-server
+    image: ghcr.io/labring/fastgpt-mcp_server:v4.10.0-fix
+    ports:
+      - 3005:3000
+    networks:
+      - dokploy-network
+    restart: always
+    environment:
+      - FASTGPT_ENDPOINT=http://fastgpt:3000
+  fastgpt-plugin:
+    image: ghcr.io/labring/fastgpt-plugin:v0.1.2
+    container_name: fastgpt-plugin
+    restart: always
+    networks:
+      - dokploy-network
+    environment:
+      - AUTH_TOKEN=xxxxxx
+      - MINIO_CUSTOM_ENDPOINT=https://192.168.2.2:9000
+      - MINIO_ENDPOINT=fastgpt-minio
+      - MINIO_PORT=9000
+      - MINIO_USE_SSL=false
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=fastgpt-plugins
+    depends_on:
+      fastgpt-minio:
+        condition: service_healthy
+
+  aiproxy:
+    image: ghcr.io/labring/aiproxy:v0.2.2
+    container_name: aiproxy
+    restart: unless-stopped
+    depends_on:
+      aiproxy_pg:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    environment:
+      - ADMIN_KEY=aiproxy
+      - LOG_DETAIL_STORAGE_HOURS=1
+      - SQL_DSN=postgres://postgres:aiproxy@aiproxy_pg:5432/aiproxy
+      - RETRY_TIMES=3
+      - BILLING_ENABLED=false
+      - DISABLE_MODEL_CONFIG=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  aiproxy_pg:
+    image: pgvector/pgvector:0.8.0-pg15
+    restart: unless-stopped
+    container_name: aiproxy_pg
+    volumes:
+      - ./aiproxy_pg:/var/lib/postgresql/data
+    networks:
+      - dokploy-network
+    environment:
+      TZ: Asia/Shanghai
+      POSTGRES_USER: postgres
+      POSTGRES_DB: aiproxy
+      POSTGRES_PASSWORD: aiproxy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "aiproxy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      
+networks:
+  dokploy-network:
+    external: true
