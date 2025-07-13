@@ -236,13 +236,10 @@ aiproxy:
     environment:
       ADMIN_KEY: ${AIPROXY_API_TOKEN}
       LOG_DETAIL_STORAGE_HOURS: ${LOG_DETAIL_STORAGE_HOURS}
-      SQL_DSN: ${AIPROXY_SQL_DSN}
+      - SQL_DSN=postgres://postgres:aiproxy@aiproxy_pg:5432/aiproxy
       RETRY_TIMES: ${AIPROXY_RETRY_TIMES}
       BILLING_ENABLED: ${AIPROXY_BILLING_ENABLED}
       DISABLE_MODEL_CONFIG: ${AIPROXY_DISABLE_MODEL_CONFIG}
-    volumes:
-      - aiproxy_data:/data
-      - ./aiproxy:/aiproxy
     depends_on:
       aiproxy_pg:
         condition: service_healthy
@@ -262,7 +259,7 @@ aiproxy:
     restart: unless-stopped
   
   aiproxy_pg:
-    container_name: aiproxy_postgres
+    container_name: aiproxy_pg
     image: pgvector/pgvector:${AIPROXY_PG_VERSION}
     environment:
       TZ: ${TIMEZONE}
