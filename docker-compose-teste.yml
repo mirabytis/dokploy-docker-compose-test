@@ -145,9 +145,9 @@ services:
     networks:
       - dokploy-network
     depends_on:
-      - mongo
+      - mongodb
       - sandbox
-      - pg
+      - postgres
     restart: always
     environment:
       - FE_DOMAIN=
@@ -155,16 +155,16 @@ services:
       - TOKEN_KEY=any
       - ROOT_KEY=root_key
       - FILE_TOKEN_KEY=filetoken
-      - AES256_SECRET_KEY=fastgptkey
-      - PLUGIN_BASE_URL=http://fastgpt-plugin:3000
+      - AES256_SECRET_KEY=orixgptkey
+      - PLUGIN_BASE_URL=http://orixgpt-plugin:3000
       - PLUGIN_TOKEN=xxxxxx
       - SANDBOX_URL=http://sandbox:3000
       - AIPROXY_API_ENDPOINT=http://aiproxy:3000
       - AIPROXY_API_TOKEN=aiproxy
       - DB_MAX_LINK=30
-      - MONGODB_URI=mongodb://myusername:mypassword@mongo:27017/fastgpt?authSource=admin
-      - REDIS_URL=redis://default:mypassword@redis:6379
-      - PG_URL=postgresql://username:password@pg:5432/postgres
+      - MONGODB_URI=mongodb://orix:evaluAt10n@mongodb:27017/orixgpt?authSource=admin&replicaSet=rs0
+      - REDIS_URL=redis://default:evaluAt10n@redis:6379
+      - PG_URL=postgresql://orix:evaluAt10n@postgres:5432/orixgpt
       - LOG_LEVEL=info
       - STORE_LOG_LEVEL=warn
       - WORKFLOW_MAX_RUN_TIMES=1000
