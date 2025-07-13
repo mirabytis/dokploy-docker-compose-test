@@ -230,45 +230,69 @@ services:
       fastgpt-minio:
         condition: service_healthy
 
-  aiproxy:
-    image: ghcr.io/labring/aiproxy:v0.2.2
+aiproxy:
     container_name: aiproxy
-    restart: unless-stopped
-    depends_on:
-      aiproxy_pg:
-        condition: service_healthy
-    networks:
-      - dokploy-network
+    image: ghcr.io/labring/aiproxy:v${AIPROXY_VERSION}
     environment:
-      - ADMIN_KEY=aiproxy
-      - LOG_DETAIL_STORAGE_HOURS=1
-      - SQL_DSN=postgres://postgres:aiproxy@aiproxy_pg:5432/aiproxy
-      - RETRY_TIMES=3
-      - BILLING_ENABLED=false
-      - DISABLE_MODEL_CONFIG=true
+      ADMIN_KEY: ${AIPROXY_API_TOKEN}
+      LOG_DETAIL_STORAGE_HOURS: ${LOG_DETAIL_STORAGE_HOURS}
+      SQL_DSN: ${AIPROXY_SQL_DSN}
+      RETRY_TIMES: ${AIPROXY_RETRY_TIMES}
+      BILLING_ENABLED: ${AIPROXY_BILLING_ENABLED}
+      DISABLE_MODEL_CONFIG: ${AIPROXY_DISABLE_MODEL_CONFIG}
+    volumes:
+      - aiproxy_data:/data
+      - ./aiproxy:/aiproxy
+    depends_on:
+      aiproxy_postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
-  aiproxy_pg:
-    image: pgvector/pgvector:0.8.0-pg15
-    restart: unless-stopped
-    container_name: aiproxy_pg
-    volumes:
-      - ./aiproxy_pg:/var/lib/postgresql/data
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     networks:
       - dokploy-network
+    restart: unless-stopped
+  
+  aiproxy_pg:
+    container_name: aiproxy_postgres
+    image: pgvector/pgvector:${AIPROXY_PG_VERSION}
     environment:
-      TZ: Asia/Shanghai
-      POSTGRES_USER: postgres
-      POSTGRES_DB: aiproxy
-      POSTGRES_PASSWORD: aiproxy
+      TZ: ${TIMEZONE}
+      POSTGRES_USER: ${AIPROXY_PG_USER}
+      POSTGRES_DB: ${AIPROXY_PG_DB}
+      POSTGRES_PASSWORD: ${AIPROXY_PG_PASSWORD}
+    volumes:
+      - ./aiproxy_pg:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "aiproxy"]
-      interval: 5s
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-U",
+          "${AIPROXY_PG_USER}",
+          "-d",
+          "${AIPROXY_PG_DB}",
+        ]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - dokploy-network
+    restart: unless-stopped
       
 networks:
   dokploy-network:
